@@ -15,6 +15,7 @@ Design choices:
 """
 
 import torch
+import torch_directml
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -136,3 +137,9 @@ def build_model(device: torch.device | None = None) -> tuple[ChainReactionNet, t
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = ChainReactionNet().to(device)
     return model, device
+#def build_model(device: torch.device | None = None):
+#    if device is None:
+#        device = torch_directml.device()
+#
+#    model = ChainReactionNet().to(device)
+#    return model, device

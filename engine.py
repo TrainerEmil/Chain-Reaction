@@ -283,9 +283,12 @@ class ChainReaction:
         cap = self.cap
         nbrs = self.nbrs
         alive = self.alive
+        opp = self.opponent(s)
+        result: Optional[int] = None
 
         while q:
             x = q.popleft()
+            mark[x] = 0
             cx = board[x]
             if cx == EMPTY:
                 continue                # Became empty in a previous explosion
@@ -329,11 +332,28 @@ class ChainReaction:
 
                 if abs(board[nb]) >= cap[nb]:
                     enqueue(nb)
+                # If the opponent has been eliminated during this chain reaction,
+                # end the move immediately instead of continuing to topple a
+                # single-colour board indefinitely.
+                if alive[opp] == 0 and alive[s] > 2:
+                    result = s
+                    q.clear()
+                    break
+
 
         # ---- D: Check winner and switch player -----------------------
-        result = self.winner()
+        if result is None:
+            for j in range(self.n):
+                assert self.board[j] == EMPTY or abs(self.board[j]) < self.cap[j], (
+                    f"Unstable cell left after resolution at index {j}: "
+                    f"value={self.board[j]}, cap={self.cap[j]}"
+                )
+
+            result = self.winner()
+
         if result is None:
             self.current_player = self.opponent(s)
+
         return result
 
     # ------------------------------------------------------------------
