@@ -11,10 +11,14 @@ Channels (from the current player's perspective):
 
 All values are floats in [0, 1].
 
-The key design decision is *perspective encoding*: the network always
-sees the board as "me vs. them", regardless of which physical player is
-acting.  This allows the same network weights to be used for both players
-and simplifies training.
+OPTIMISATION NOTES
+------------------
+The original implementation iterated over every cell in pure Python.
+This version replaces all per-cell loops with vectorised NumPy operations,
+which are executed in C and avoid the Python interpreter overhead entirely.
+
+For a 5×5 board the loop was 25 iterations; with NumPy the entire encoding
+collapses to ~8 array operations regardless of board size.
 """
 
 import numpy as np
@@ -30,69 +34,65 @@ def encode_state(game: ChainReaction) -> np.ndarray:
     Returns
     -------
     np.ndarray, shape (5, rows, cols), dtype float32
+
+    Changes vs original
+    -------------------
+    * Python for-loop replaced by vectorised NumPy operations.
+    * `np.asarray` converts the Python list once; all subsequent work is
+      done on contiguous C arrays at C speed.
+    * `np.ascontiguousarray` at the end guarantees the output layout
+      expected by PyTorch's `from_numpy`.
     """
     rows, cols = game.rows, game.cols
-    n = game.n
     s = game.current_player          # +1 for P1, -1 for P2
-    board = game.board
-    cap = game.cap
-
-    # Maximum possible orbs in a cell – used for normalisation.
-    # A cell can theoretically accumulate many orbs, but in practice
-    # values above cap are rare.  We normalise by max capacity (4) to
-    # keep values in a sensible range; values > 1 are fine for the net.
     max_cap = 4.0
 
-    own_orbs  = np.zeros((rows, cols), dtype=np.float32)
-    opp_orbs  = np.zeros((rows, cols), dtype=np.float32)
-    capacity  = np.zeros((rows, cols), dtype=np.float32)
-    own_crit  = np.zeros((rows, cols), dtype=np.float32)
-    opp_crit  = np.zeros((rows, cols), dtype=np.float32)
+    # Convert Python lists → NumPy arrays once (O(n) in C, not Python)
+    board = np.asarray(game.board, dtype=np.int32).reshape(rows, cols)
+    cap   = np.asarray(game.cap,   dtype=np.float32).reshape(rows, cols)
 
-    for i in range(n):
-        r, c = divmod(i, cols)
-        v = board[i]
-        ci = cap[i]
+    orbs = np.abs(board).astype(np.float32)   # unsigned orb count per cell
 
-        capacity[r, c] = ci / max_cap
+    # Boolean masks – no Python branching per cell
+    own_mask = (board * s) > 0   # cells that belong to the current player
+    opp_mask = (board * s) < 0   # cells that belong to the opponent
 
-        if v == 0:
-            continue
+    # Channel 0 & 1: normalised orb counts per player
+    own_orbs = np.where(own_mask, orbs, 0.0) / max_cap
+    opp_orbs = np.where(opp_mask, orbs, 0.0) / max_cap
 
-        orbs = abs(v)
-        owner_sign = 1 if v > 0 else -1
+    # Channel 2: cell capacity (static, same for both players)
+    capacity = cap / max_cap
 
-        if owner_sign == s:          # current player owns this cell
-            own_orbs[r, c] = orbs / max_cap
-            if orbs == ci - 1:
-                own_crit[r, c] = 1.0
-        else:                        # opponent owns this cell
-            opp_orbs[r, c] = orbs / max_cap
-            if orbs == ci - 1:
-                opp_crit[r, c] = 1.0
+    # Channel 3 & 4: "critical" cells (one explosion away)
+    # A cell is critical when  orbs == cap - 1
+    cap_minus_1 = cap - 1.0
+    own_crit = np.where(own_mask & (orbs == cap_minus_1), 1.0, 0.0).astype(np.float32)
+    opp_crit = np.where(opp_mask & (orbs == cap_minus_1), 1.0, 0.0).astype(np.float32)
 
-    # Stack into shape (5, rows, cols)
-    return np.stack([own_orbs, opp_orbs, capacity, own_crit, opp_crit], axis=0)
+    # Stack → (5, rows, cols) and ensure a contiguous memory layout
+    return np.ascontiguousarray(
+        np.stack([own_orbs, opp_orbs, capacity, own_crit, opp_crit]).astype(np.float32)
+    )
 
 
 def legal_action_mask(game: ChainReaction) -> np.ndarray:
     """
-    Return a boolean mask of shape (rows * cols,) where True means legal.
+    Return a float32 mask of shape (rows * cols,).
+    1.0 = legal move, 0.0 = illegal.
 
-    The network's policy head outputs logits over all n cells.
-    We zero-out illegal cells before the softmax during MCTS and training.
+    Changes vs original
+    -------------------
+    Python for-loop replaced by a single NumPy boolean expression.
     """
-    n = game.n
     s = game.current_player
-    board = game.board
-    mask = np.zeros(n, dtype=np.float32)
-    for i in range(n):
-        if board[i] == 0 or board[i] * s > 0:
-            mask[i] = 1.0
-    return mask
+    board = np.asarray(game.board, dtype=np.int32)
+    # A cell is legal when it is empty OR owned by the current player
+    return ((board == 0) | (board * s > 0)).astype(np.float32)
 
 
 def encode_state_tensor(game: ChainReaction) -> torch.Tensor:
     """Convenience wrapper: encode and return a (1, C, H, W) float32 tensor."""
     arr = encode_state(game)
-    return torch.from_numpy(arr).unsqueeze(0)   # add batch dim
+    # from_numpy shares memory with arr (zero-copy); unsqueeze adds batch dim.
+    return torch.from_numpy(arr).unsqueeze(0)

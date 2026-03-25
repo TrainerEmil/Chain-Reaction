@@ -139,7 +139,6 @@ def load_training_state(
     """
     path = state_path()
 
-    #payload = torch.load(path, map_location="cpu", weights_only=False)
     payload = torch.load(path, map_location=device, weights_only=False)
 
     model.load_state_dict(payload["model_state"])

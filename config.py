@@ -1,12 +1,33 @@
 """
 config.py – Central hyperparameter configuration.
 
-All other modules import from here so you only need to change
-values in one place.
+All other modules import CFG from here.
+
+CPU-TRAINING NOTES
+------------------
+The defaults below are tuned for a modern multi-core CPU (8–16 cores).
+Key knobs for iteration speed:
+
+  mcts_simulations       – most direct lever; fewer sims = faster self-play.
+                           12 is already aggressive; do not go below 8 or
+                           the MCTS policy signal degrades significantly.
+
+  selfplay_games_per_iter – scales linearly with wall time.  Reduce early
+                           in training when the buffer fills up quickly anyway.
+
+  eval_time_limit_s       – bounds evaluation cost.  0.05 s/move means MCTS
+                           runs until the timer fires (often just 1–3 sims
+                           on a slow machine), which is fine for relative
+                           comparison between models.
+
+  num_filters / num_res_blocks – smaller networks are faster but weaker.
+                           The defaults (64 filters, 4 blocks) are a good
+                           trade-off for CPU.  Increase after training is
+                           stable.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -17,55 +38,52 @@ class Config:
     cols: int = 5
 
     # ── Encoding ───────────────────────────────────────────────────────
-    # Number of input channels for the CNN (see encoding.py)
-    num_channels: int = 5   # own orbs | opp orbs | capacity | own crit | opp crit
+    # own orbs | opp orbs | capacity | own critical | opp critical
+    num_channels: int = 5
 
     # ── MCTS ───────────────────────────────────────────────────────────
-    mcts_simulations: int = 96      # simulations per move (self-play)
-    c_puct: float = 1.5             # exploration constant
-    dirichlet_alpha: float = 0.3    # noise alpha  (added at root in self-play)
-    dirichlet_epsilon: float = 0.25 # weight of Dirichlet noise
+    mcts_simulations:   int   = 12
+    c_puct:             float = 1.5
+    dirichlet_alpha:    float = 0.3
+    dirichlet_epsilon:  float = 0.25
 
     # ── Self-Play ──────────────────────────────────────────────────────
-    selfplay_games_per_iter: int = 150   # games generated each iteration
-    temperature_threshold: int = 12     # moves < threshold -> sample; else greedy
-    max_game_length: int = 120         # safety cap; draw if exceeded
+    selfplay_games_per_iter: int = 50
+    temperature_threshold:   int = 12
+    max_game_length:         int = 70
+    num_selfplay_workers: Optional[int] = None
 
     # ── Replay Buffer ──────────────────────────────────────────────────
     replay_buffer_size: int = 60_000
 
     # ── Training ───────────────────────────────────────────────────────
-    batch_size: int = 256
-    train_steps_per_iter: int = 300
-    learning_rate: float = 1e-4
-    weight_decay: float = 1e-4
-    value_loss_weight: float = 1.0   # relative weight of value vs policy loss
+    batch_size:            int   = 256
+    train_steps_per_iter:  int   = 100
+    learning_rate:         float = 1e-4
+    weight_decay:          float = 1e-4
+    value_loss_weight:     float = 1.0
 
     # ── CNN architecture ───────────────────────────────────────────────
-    num_filters: int = 128
-    num_res_blocks: int = 8          # residual blocks in the trunk
+    # These control the backbone shared by all 8 D4 copies in one batch.
+    # Larger values are safe (the optimised forward pass handles bigger
+    # batch sizes efficiently), but increase per-step training time.
+    num_filters:    int = 64
+    num_res_blocks: int = 4
 
     # ── Evaluation ─────────────────────────────────────────────────────
-    eval_games: int = 150             # total games per matchup (split P1/P2)
-    win_rate_threshold: float = 0.52 # needed to replace the best model
+    eval_games:           int   = 120
+    win_rate_threshold:   float = 0.52
 
     # Per-move time budget for evaluation MCTS (seconds).
-    # MCTS stops adding simulations as soon as this many seconds have
-    # elapsed for a single move, regardless of mcts_simulations.
-    # Set to None to disable the time cap and always run all simulations.
-    #
-    # Recommended values:
-    #   0.1  – very fast, ~a handful of simulations on a typical CPU
-    #   0.5  – balanced: noticeably stronger than random, still quick
-    #   1.0  – slow but strong; good for final evaluation
-    #   None – no cap; uses mcts_simulations exactly (original behaviour)
-    eval_time_limit_s: Optional[float] = 0.2
+    # 0.05 s → usually 1–5 MCTS sims on a typical CPU, very fast.
+    # None  → use mcts_simulations exactly (slow on CPU).
+    eval_time_limit_s: Optional[float] = 0.05
 
     # ── Misc ───────────────────────────────────────────────────────────
-    seed: int = 42
+    seed:           int = 42
     checkpoint_dir: str = "checkpoints"
-    log_interval: int = 20           # print stats every N train steps
+    log_interval:   int = 20
 
 
-# A global default instance – import this in other modules.
+# Global default instance imported by all other modules.
 CFG = Config()
