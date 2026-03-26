@@ -1,1 +1,114 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chain Reaction — vs. AI</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet" />
+</head>
+<body>
 
+  <!-- ── Header ────────────────────────────────────────────── -->
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-main">CHAIN</span>
+        <span class="logo-sub">REACTION</span>
+      </div>
+      <div class="header-meta">
+        <span class="badge" id="model-badge">LOADING…</span>
+        <span class="badge badge-dim" id="sims-badge">— SIMS</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main layout ───────────────────────────────────────── -->
+  <main>
+
+    <!-- Left panel: controls + legend -->
+    <aside class="panel panel-left">
+      <section class="player-card" id="card-p1">
+        <div class="player-dot dot-p1"></div>
+        <div class="player-info">
+          <div class="player-label">YOU</div>
+          <div class="player-desc">Player 1 · Orange</div>
+        </div>
+        <div class="player-turn-arrow" id="arrow-p1">▶</div>
+      </section>
+
+      <section class="player-card" id="card-p2">
+        <div class="player-dot dot-p2"></div>
+        <div class="player-info">
+          <div class="player-label">AI</div>
+          <div class="player-desc">Player 2 · Teal</div>
+        </div>
+        <div class="player-turn-arrow" id="arrow-p2">▶</div>
+      </section>
+
+      <div class="divider"></div>
+
+      <div class="legend">
+        <div class="legend-title">HOW TO PLAY</div>
+        <ul class="legend-list">
+          <li><span class="orb-dot orb-1"></span> Click any empty or own cell</li>
+          <li><span class="orb-dot orb-crit"></span> Critical — will explode</li>
+          <li><span class="chain-icon">⚡</span> Chain reactions spread orbs</li>
+          <li><span class="chain-icon">💀</span> Capture all cells to win</li>
+        </ul>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="stat-row">
+        <span class="stat-label">MOVES</span>
+        <span class="stat-value" id="stat-moves">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">ACTIVE GAMES</span>
+        <span class="stat-value" id="stat-active">—</span>
+      </div>
+    </aside>
+
+    <!-- Center: board + status -->
+    <div class="center">
+      <div class="status-bar" id="status-bar">
+        <span id="status-text">Starting…</span>
+      </div>
+
+      <div class="board-wrapper">
+        <div id="board" class="board"></div>
+        <div id="thinking-overlay" class="thinking-overlay hidden">
+          <div class="thinking-spinner"></div>
+          <span>AI thinking…</span>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-primary" id="btn-new-p1">NEW GAME (You first)</button>
+        <button class="btn btn-ghost" id="btn-new-p2">AI first</button>
+      </div>
+    </div>
+
+    <!-- Right panel: move log -->
+    <aside class="panel panel-right">
+      <div class="log-title">MOVE LOG</div>
+      <ol id="move-log" class="move-log"></ol>
+    </aside>
+
+  </main>
+
+  <!-- ── Win overlay ───────────────────────────────────────── -->
+  <div id="win-overlay" class="win-overlay hidden">
+    <div class="win-card">
+      <div class="win-emoji" id="win-emoji">🎉</div>
+      <div class="win-title" id="win-title">YOU WIN</div>
+      <div class="win-sub" id="win-sub">Well played!</div>
+      <button class="btn btn-primary" id="btn-play-again">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
