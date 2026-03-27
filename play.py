@@ -265,6 +265,8 @@ class GameUI:
             return
 
         self.winner = self.game.step(action)
+        if self.ai_agent is not None:
+            self.ai_agent.advance(action, self.game)
         self._update_status()
 
     # ------------------------------------------------------------------
@@ -284,6 +286,8 @@ class GameUI:
             return
 
         self.winner = self.game.step(cell)
+        if self.ai_agent is not None:
+            self.ai_agent.advance(cell, self.game)
         self._update_status()
 
         if self.winner is None and self.game.current_player == self.ai_player:

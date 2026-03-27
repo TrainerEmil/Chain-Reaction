@@ -56,18 +56,14 @@ class ChainReaction:
 
     Parameters
     ----------
-    rows, cols : int
-        Board dimensions (both must be >= 2).
-    max_events : int
-        Safety limit on the total number of explosions per step.
-        Prevents infinite loops on degenerate boards.
+    rows, cols, max_events : int
     """
 
     # ------------------------------------------------------------------
     # Construction / initialisation
     # ------------------------------------------------------------------
 
-    def __init__(self, rows: int = 9, cols: int = 6, max_events: int = 200_000) -> None:
+    def __init__(self, rows: int = 5, cols: int = 5, max_events: int = 200_000) -> None:
         if rows < 2 or cols < 2:
             raise ValueError("Board must be at least 2×2.")
         self.rows = rows
@@ -386,33 +382,8 @@ class ChainReaction:
 # Convenience factory
 # ---------------------------------------------------------------------------
 
-def make_game(rows: int = 9, cols: int = 6) -> ChainReaction:
+def make_game(rows: int = 5, cols: int = 5) -> ChainReaction:
     """Create and reset a fresh ChainReaction game."""
     g = ChainReaction(rows, cols)
     g.reset()
     return g
-
-
-# ---------------------------------------------------------------------------
-# Quick smoke-test (run with:  python chain_reaction.py)
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import random
-
-    random.seed(42)
-    game = make_game(rows=6, cols=6)
-    print("=== Chain Reaction – smoke test ===\n")
-    print(game)
-
-    move_count = 0
-    winner = None
-    while winner is None:
-        actions = game.legal_actions()
-        action = random.choice(actions)
-        winner = game.step(action)
-        move_count += 1
-
-    print(f"\n--- After {move_count} random moves ---")
-    print(game)
-    print(f"\nWinner: {'P1' if winner == P1 else 'P2'}")

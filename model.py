@@ -6,17 +6,10 @@ D4-symmetry averaging
 The original implementation called `self.base(x_g)` **eight times** in
 a Python for-loop.  On CPU each call carries a large fixed overhead
 (Python dispatch, BatchNorm statistics, memory allocation).
-
-OPTIMISATION: All 8 transformed inputs are concatenated into a single
+All 8 transformed inputs are concatenated into a single
 tensor of shape (8·B, C, H, W) and passed through `base` in **one**
 forward call.  The result is split and the inverse transforms are
 applied before averaging.
-
-Effect:
-  * Eliminates 7/8 of the Python-level framework overhead per inference.
-  * BatchNorm, linear layers, and conv kernels all benefit from operating
-    on a larger contiguous block of data (better SIMD / cache usage).
-  * Measured speedup on CPU: roughly 3–5× for single-state MCTS queries.
 
 torch.compile
 -------------
@@ -35,7 +28,7 @@ import torch.nn.functional as F
 from config import CFG
 
 # ---------------------------------------------------------------------------
-# D4 spatial transforms   (unchanged – these are pure tensor ops)
+# D4 spatial transforms
 # ---------------------------------------------------------------------------
 
 def rot90(x: torch.Tensor, k: int) -> torch.Tensor:
@@ -70,7 +63,7 @@ def invert_d4(g: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Residual block   (unchanged)
+# Residual block
 # ---------------------------------------------------------------------------
 
 class ResBlock(nn.Module):
@@ -88,7 +81,7 @@ class ResBlock(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Backbone   (unchanged architecture; same weights as before)
+# Backbone
 # ---------------------------------------------------------------------------
 
 class BaseEquiBackbone(nn.Module):
@@ -141,7 +134,7 @@ class BaseEquiBackbone(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# D4-symmetrized policy-value network  ← KEY CHANGE
+# D4-symmetrized policy-value network
 # ---------------------------------------------------------------------------
 
 class ChainReactionNet(nn.Module):
@@ -174,25 +167,6 @@ class ChainReactionNet(nn.Module):
         x              : (B, C, H, W)
         policy_logits  : (B, H*W)
         value          : (B, 1)
-
-        OPTIMISATION – single batched forward pass
-        ------------------------------------------
-        Instead of calling self.base eight times in a Python loop (original),
-        we stack all eight D4-transformed copies of x along the batch
-        dimension and run exactly ONE forward pass through self.base.
-
-        Steps:
-          1. Build x_all of shape (8·B, C, H, W)  by concatenating the
-             8 transformed versions along dim 0.
-          2. Call self.base once  →  p_all (8·B, H, W)  and
-                                     v_all (8·B, 1).
-          3. Split p_all back into 8 blocks, invert each transform, then
-             average to get the equivariant policy estimate.
-          4. Average v_all over the 8 group elements to get the invariant
-             value estimate.
-
-        Memory cost: peak usage is 8× the batch size flowing through the
-        network at once – acceptable per the "larger memory is OK" note.
         """
         B = x.size(0)
 

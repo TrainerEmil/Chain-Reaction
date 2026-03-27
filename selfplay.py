@@ -4,34 +4,12 @@ selfplay.py – Generate self-play games and collect training examples.
 Each game produces a list of (state, policy_target, value_target) triples.
 
 Value labelling:
-  After the game ends we know the winner.  For every stored position we set
-  value_target = +1 if the player to move at that position won, else -1.
-  Consistent with the network's perspective encoding and MCTS backprop.
+  value_target = +1 if the player to move at that position won, else −1.
 
 Temperature schedule:
   Moves < temperature_threshold  →  sample with T=1.0  (exploration)
   Moves ≥ temperature_threshold  →  greedy             (T=0)
 
-OPTIMISATIONS IN THIS FILE
---------------------------
-Worker-pool initialiser (biggest gain)
-    Original: the model state-dict was passed as a function *argument* to
-    every submitted task, so it was pickled once per game (50× per
-    iteration for CFG.selfplay_games_per_iter=50).  For a model with
-    ~1–2 M parameters that is ~4–8 MB of IPC data per game.
-
-    Fixed: ProcessPoolExecutor is created with an `initializer` that loads
-    the model state-dict into a module-level global *once per worker
-    process*.  The worker function receives only lightweight scalar
-    arguments (ints + optional seed).  IPC overhead drops from O(games)
-    to O(workers) – typically 8–16× less data sent over the pipe.
-
-Worker-count heuristic
-    CPU-bound tasks benefit most from one process per *physical* core.
-    `os.cpu_count()` returns logical cores (including HyperThreading
-    siblings), which can double the apparent count.  We cap workers at
-    `min(num_games, os.cpu_count())` but the user can override via
-    CFG.num_selfplay_workers if they want tighter control.
 """
 
 from __future__ import annotations
@@ -52,29 +30,38 @@ from replay_buffer import Example
 
 
 # ---------------------------------------------------------------------------
-# Module-level worker state  (populated by _worker_init, used by workers)
+# Module-level worker state
 # ---------------------------------------------------------------------------
 
-_worker_model: Optional[torch.nn.Module] = None
+_worker_model:  Optional[torch.nn.Module] = None
 _worker_device: Optional[torch.device]   = None
+
 
 def _worker_init(model_state_dict: dict, device_str: str) -> None:
     """
-    Initialiser called once per worker process when the pool starts.
+    Called once per worker process when the pool is created.
 
-    Loads the model into a module-level global so that subsequent tasks
-    submitted to this worker do not need to re-deserialise the state dict.
-
-    Cost: O(workers), not O(games).
+    TWO key actions:
+      1. Pin PyTorch to 1 thread (see optimisation [2] above).
+      2. Load the model into a module-level global (see optimisation [1]).
     """
     global _worker_model, _worker_device
 
-    # Import here so child processes don't inherit the parent's CUDA context
-    from model import build_model  # noqa: PLC0415
+    # ── Thread pinning ────────────────────────────────────────────────
+    # Must be called before ANY torch tensor operation in this process.
+    # Setting both intra-op and inter-op thread counts to 1 ensures that
+    # N worker processes occupy exactly N CPU threads – no more.
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+
+    # ── Model loading ─────────────────────────────────────────────────
+    from model import build_model  # noqa: PLC0415  (avoid circular import in parent)
 
     _worker_device = torch.device(device_str)
-    # compile_model=False in workers: compilation overhead is not worth it
-    # for short-lived worker processes.
+
+    # compile_model=False in workers: torch.compile's one-time JIT cost
+    # (~2–5 s) is amortised over many games in the main process, but for
+    # a worker that processes ~3–6 games it is never worth it.
     _worker_model, _ = build_model(_worker_device, compile_model=False)
     _worker_model.load_state_dict(model_state_dict)
     _worker_model.eval()
@@ -92,6 +79,7 @@ def play_game(
     num_simulations:       int  = CFG.mcts_simulations,
     temperature_threshold: int  = CFG.temperature_threshold,
     max_game_length:       int  = CFG.max_game_length,
+    inference_batch_size:  int  = CFG.mcts_inference_batch_size,
     seed: Optional[int]         = None,
 ) -> List[Example]:
     """
@@ -110,7 +98,7 @@ def play_game(
     game = ChainReaction(rows, cols)
     game.reset()
 
-    history = []          # (encoded_state, policy, current_player)
+    history: List = []   # (encoded_state, policy, current_player)
     move_number = 0
     winner      = None
 
@@ -126,6 +114,7 @@ def play_game(
             temperature=temperature,
             add_noise=True,
             reuse_tree=True,
+            inference_batch_size=inference_batch_size,
         )
 
         history.append((encoded, policy, player))
@@ -143,7 +132,7 @@ def play_game(
 
 
 # ---------------------------------------------------------------------------
-# Lightweight worker task  (no model argument – uses the global)
+# Worker task  (lightweight – no model argument)
 # ---------------------------------------------------------------------------
 
 def _play_game_worker(
@@ -152,14 +141,14 @@ def _play_game_worker(
     num_simulations:       int,
     temperature_threshold: int,
     max_game_length:       int,
+    inference_batch_size:  int,
     seed: Optional[int],
 ) -> List[Example]:
     """
-    Task executed inside a worker process.
+    Executed inside a worker process.
 
-    Uses the module-level `_worker_model` and `_worker_device` that were
-    set up once by `_worker_init`.  No model state dict is transferred;
-    only small scalar arguments are pickled by the pool.
+    Uses the module-level `_worker_model` / `_worker_device` set up by
+    `_worker_init`.  Only small scalar arguments are pickled by the pool.
     """
     return play_game(
         _worker_model,   # type: ignore[arg-type]
@@ -169,6 +158,7 @@ def _play_game_worker(
         num_simulations=num_simulations,
         temperature_threshold=temperature_threshold,
         max_game_length=max_game_length,
+        inference_batch_size=inference_batch_size,
         seed=seed,
     )
 
@@ -180,17 +170,17 @@ def _play_game_worker(
 def run_selfplay(
     model: torch.nn.Module,
     device: torch.device,
-    num_games: int           = CFG.selfplay_games_per_iter,
-    seed: Optional[int]      = None,
+    num_games: int      = CFG.selfplay_games_per_iter,
+    seed: Optional[int] = None,
 ) -> List[Example]:
     """
-    Run *num_games* self-play games in parallel and aggregate examples.
+    Run *num_games* self-play games in parallel and collect examples.
 
     Parameters
     ----------
-    model     : Current best network (weights are copied to workers).
-    device    : Torch device (only CPU workers are spawned regardless).
-    num_games : Number of games to play.
+    model     : Current best network (weights copied to workers once).
+    device    : Torch device (workers always run on CPU regardless).
+    num_games : Total games per call.
     seed      : Base seed; game i gets seed+i for reproducibility.
 
     Returns
@@ -199,14 +189,14 @@ def run_selfplay(
     """
     model.eval()
 
-    # Serialise weights once (not once per game)
+    # Serialise model weights once – workers receive them via initialiser.
     model_state_dict = {
         k: v.detach().cpu() for k, v in model.state_dict().items()
     }
 
-    # Number of workers: at most one per game, and at most cpu_count.
-    # We avoid spawning more workers than physical tasks to prevent
-    # excessive process-creation overhead.
+    # One worker per logical CPU, capped at num_games.
+    # Each worker uses only 1 PyTorch thread (set in _worker_init), so
+    # total threads in flight == min(cpu_count, num_games).
     num_workers = min(os.cpu_count() or 1, num_games)
 
     all_examples: List[Example] = []
@@ -214,8 +204,9 @@ def run_selfplay(
     with ProcessPoolExecutor(
         max_workers=num_workers,
         initializer=_worker_init,
-        initargs=(model_state_dict, "cpu"),   # workers always use CPU
+        initargs=(model_state_dict, "cpu"),
     ) as executor:
+
         futures = [
             executor.submit(
                 _play_game_worker,
@@ -224,6 +215,7 @@ def run_selfplay(
                 CFG.mcts_simulations,
                 CFG.temperature_threshold,
                 CFG.max_game_length,
+                CFG.mcts_inference_batch_size,
                 None if seed is None else seed + i,
             )
             for i in range(num_games)

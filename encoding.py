@@ -1,24 +1,16 @@
 """
-encoding.py – Converts a ChainReaction game state into a tensor that the
+Here we convert a ChainReaction game state into a tensor which the
 CNN can consume, and builds the legal-action mask.
 
-Channels (from the current player's perspective):
+We use the following 5 channels
   0 : own orbs       – normalised count of orbs the current player owns
   1 : opponent orbs  – normalised count of opponent orbs
   2 : capacity       – capacity of each cell (normalised, static)
-  3 : own critical   – cells where own orbs == cap - 1 (one away from exploding)
+  3 : own critical   – cells where own orbs == cap - 1
   4 : opp critical   – cells where opp orbs == cap - 1
 
 All values are floats in [0, 1].
 
-OPTIMISATION NOTES
-------------------
-The original implementation iterated over every cell in pure Python.
-This version replaces all per-cell loops with vectorised NumPy operations,
-which are executed in C and avoid the Python interpreter overhead entirely.
-
-For a 5×5 board the loop was 25 iterations; with NumPy the entire encoding
-collapses to ~8 array operations regardless of board size.
 """
 
 import numpy as np
@@ -30,18 +22,9 @@ from engine import ChainReaction, P1
 def encode_state(game: ChainReaction) -> np.ndarray:
     """
     Encode the current game state as a float32 numpy array.
-
     Returns
     -------
     np.ndarray, shape (5, rows, cols), dtype float32
-
-    Changes vs original
-    -------------------
-    * Python for-loop replaced by vectorised NumPy operations.
-    * `np.asarray` converts the Python list once; all subsequent work is
-      done on contiguous C arrays at C speed.
-    * `np.ascontiguousarray` at the end guarantees the output layout
-      expected by PyTorch's `from_numpy`.
     """
     rows, cols = game.rows, game.cols
     s = game.current_player          # +1 for P1, -1 for P2
@@ -80,10 +63,6 @@ def legal_action_mask(game: ChainReaction) -> np.ndarray:
     """
     Return a float32 mask of shape (rows * cols,).
     1.0 = legal move, 0.0 = illegal.
-
-    Changes vs original
-    -------------------
-    Python for-loop replaced by a single NumPy boolean expression.
     """
     s = game.current_player
     board = np.asarray(game.board, dtype=np.int32)
