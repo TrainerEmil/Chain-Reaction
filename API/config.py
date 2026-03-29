@@ -47,7 +47,7 @@ class Config:
     num_channels: int = 5
 
     # ── MCTS ───────────────────────────────────────────────────────────
-    mcts_simulations:   int   = 64
+    mcts_simulations:   int   = 24
     c_puct:             float = 1.5
     dirichlet_alpha:    float = 0.3
     dirichlet_epsilon:  float = 0.25
