@@ -1,0 +1,96 @@
+{
+  "timestamp": "2026-04-02T19:49:18.100826",
+  "settings": {
+    "rounds": 1,
+    "positions": 5,
+    "max_opening": 5,
+    "simulations": 16,
+    "time_limit": 0.2
+  },
+  "models": [
+    {
+      "name": "model_a",
+      "weights": "models\\model_a\\checkpoints\\model_iter_248.pt"
+    },
+    {
+      "name": "model_b",
+      "weights": "models\\model_b\\checkpoints\\model_iter_033.pt"
+    },
+    {
+      "name": "model_c",
+      "weights": "models\\model_c\\checkpoints\\model_iter_008.pt"
+    },
+    {
+      "name": "model_d",
+      "weights": "models\\model_d\\checkpoints\\model_final.pt"
+    }
+  ],
+  "ratings_before": {
+    "model_a": 1160.0,
+    "model_b": 1264.3,
+    "model_c": 818.0,
+    "model_d": 757.7
+  },
+  "ratings_after": {
+    "model_a": 1220.3,
+    "model_b": 1202.6,
+    "model_c": 927.0,
+    "model_d": 650.1
+  },
+  "matches": [
+    {
+      "model_a": "model_a",
+      "model_b": "model_b",
+      "wins_a": 7,
+      "wins_b": 3,
+      "draws": 0,
+      "avg_len": 37.8,
+      "elo_delta_a": 60.3
+    },
+    {
+      "model_a": "model_a",
+      "model_b": "model_c",
+      "wins_a": 7,
+      "wins_b": 3,
+      "draws": 0,
+      "avg_len": 35.8,
+      "elo_delta_a": 60.3
+    },
+    {
+      "model_a": "model_a",
+      "model_b": "model_d",
+      "wins_a": 10,
+      "wins_b": 0,
+      "draws": 0,
+      "avg_len": 38.3,
+      "elo_delta_a": 60.3
+    },
+    {
+      "model_a": "model_b",
+      "model_b": "model_c",
+      "wins_a": 9,
+      "wins_b": 1,
+      "draws": 0,
+      "avg_len": 37.0,
+      "elo_delta_a": -61.7
+    },
+    {
+      "model_a": "model_b",
+      "model_b": "model_d",
+      "wins_a": 10,
+      "wins_b": 0,
+      "draws": 0,
+      "avg_len": 38.7,
+      "elo_delta_a": -61.7
+    },
+    {
+      "model_a": "model_c",
+      "model_b": "model_d",
+      "wins_a": 9,
+      "wins_b": 1,
+      "draws": 0,
+      "avg_len": 38.8,
+      "elo_delta_a": 109.0
+    }
+  ]
+}

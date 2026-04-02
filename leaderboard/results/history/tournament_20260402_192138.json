@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-04-02T19:21:38.777606",
+  "settings": {
+    "rounds": 1,
+    "games": 10,
+    "simulations": 16,
+    "time_limit": 0.2
+  },
+  "models": [
+    {
+      "name": "model_a",
+      "weights": "models\\model_a\\checkpoints\\model_iter_248.pt"
+    },
+    {
+      "name": "model_b",
+      "weights": "models\\model_b\\checkpoints\\model_iter_033.pt"
+    },
+    {
+      "name": "model_c",
+      "weights": "models\\model_c\\checkpoints\\model_iter_008.pt"
+    }
+  ],
+  "ratings_before": {
+    "model_a": 1000.0,
+    "model_b": 1000.0,
+    "model_c": 1000.0
+  },
+  "ratings_after": {
+    "model_a": 1068.9,
+    "model_b": 1190.8,
+    "model_c": 740.3
+  },
+  "matches": [
+    {
+      "model_a": "model_a",
+      "model_b": "model_b",
+      "wins_a": 0,
+      "wins_b": 10,
+      "draws": 0,
+      "avg_len": 34.5,
+      "elo_delta_a": 68.9
+    },
+    {
+      "model_a": "model_a",
+      "model_b": "model_c",
+      "wins_a": 10,
+      "wins_b": 0,
+      "draws": 0,
+      "avg_len": 18.5,
+      "elo_delta_a": 68.9
+    },
+    {
+      "model_a": "model_b",
+      "model_b": "model_c",
+      "wins_a": 10,
+      "wins_b": 0,
+      "draws": 0,
+      "avg_len": 25.5,
+      "elo_delta_a": 190.8
+    }
+  ]
+}
