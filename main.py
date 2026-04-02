@@ -34,7 +34,14 @@ Usage
 
 from __future__ import annotations
 
-import argparse
+import sys, argparse
+from pathlib import Path
+
+_pre = argparse.ArgumentParser(add_help=False)
+_pre.add_argument("--model-dir", required=True)
+_MODEL_DIR = str(Path(_pre.parse_known_args()[0].model_dir).resolve())
+sys.path.insert(0, _MODEL_DIR)   # config, model, encoding resolve here first
+
 import copy
 import os
 import random
@@ -218,7 +225,8 @@ def main(num_iterations: int = 20, reset: bool = False) -> None:
         examples = run_selfplay(
             best_model, device,
             num_games=CFG.selfplay_games_per_iter,
-            seed=CFG.seed + iteration,   # deterministic per-iteration seed
+            seed=CFG.seed + iteration,
+            model_dir=_MODEL_DIR,
         )
         buffer.add(examples)
         print(f"    Buffer size: {len(buffer)}")
@@ -229,12 +237,12 @@ def main(num_iterations: int = 20, reset: bool = False) -> None:
 
         # 3. Evaluate ──────────────────────────────────────────────────
         print("[3] Evaluation …")
-        evaluate_vs_random(model, device, num_games=CFG.eval_games)
+        evaluate_vs_random(model, device, num_games=CFG.eval_games, model_dir=_MODEL_DIR)
 
         replace = False
         if iteration > 1:
             result = evaluate_vs_model(
-                model, best_model, device, num_games=CFG.eval_games
+                model, best_model, device, num_games=CFG.eval_games, model_dir= _MODEL_DIR
             )
             replace = result["win_rate"] >= CFG.win_rate_threshold
         else:
@@ -270,6 +278,8 @@ def main(num_iterations: int = 20, reset: bool = False) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chain Reaction – AlphaZero training")
+    parser.add_argument("--model-dir", required=True,
+                        help="e.g.  models/model_b")
     parser.add_argument(
         "--iterations", type=int, default=20,
         help="Total number of iterations to run (default: 20).",

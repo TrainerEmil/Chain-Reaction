@@ -33,16 +33,18 @@ _worker_device: Optional[torch.device]  = None
 
 
 def _eval_worker_init(
-    cand_state_dict:      dict,
+    cand_state_dict:      Optional[dict],
     opp_state_dict_or_none: Optional[dict],
-    device_str:           str,
-) -> None:
+    device_str:           str, model_dir: str) -> None:
     """
     Called once per worker process when the pool starts.
 
     Loads both agent models into module-level globals.  Worker tasks only
     receive lightweight scalar arguments – no model data over IPC per game.
     """
+    import sys
+    if model_dir not in sys.path:
+        sys.path.insert(0, model_dir)
     global _cand_model, _opp_model, _worker_device
 
     # ── Thread pinning ────────────────────────────────────────────────
@@ -278,7 +280,7 @@ def _check_early_stop(
 # ---------------------------------------------------------------------------
 
 def evaluate(
-    cand_state_dict:        dict,
+    cand_state_dict:        Optional[dict],
     opp_state_dict_or_none: Optional[dict],
     device:                 torch.device,
     num_games:              int            = CFG.eval_games,
@@ -286,8 +288,7 @@ def evaluate(
     time_limit_s:           Optional[float] = CFG.eval_time_limit_s,
     inference_batch_size:   int            = CFG.eval_inference_batch_size,
     verbose:                bool           = True,
-    seed:                   Optional[int]  = None,
-) -> dict:
+    seed:                   Optional[int]  = None, model_dir: str = "") -> dict:
     """
     Run *num_games* evaluation games in parallel and return statistics.
 
@@ -321,7 +322,7 @@ def evaluate(
     with ProcessPoolExecutor(
         max_workers=num_workers,
         initializer=_eval_worker_init,
-        initargs=(cand_state_dict, opp_state_dict_or_none, "cpu"),
+        initargs=(cand_state_dict, opp_state_dict_or_none, "cpu", model_dir),
     ) as executor:
 
         futures = {
@@ -404,6 +405,7 @@ def evaluate_vs_random(
     device:       torch.device,
     num_games:    int            = CFG.eval_games,
     time_limit_s: Optional[float] = CFG.eval_time_limit_s,
+    model_dir:    str             = "",
 ) -> dict:
     """Convenience wrapper: model vs. random agent (parallel)."""
     lbl = f"{time_limit_s:.2f}s/move" if time_limit_s is not None else "no time cap"
@@ -414,6 +416,7 @@ def evaluate_vs_random(
         device=device,
         num_games=num_games,
         time_limit_s=time_limit_s,
+        model_dir=model_dir,
     )
 
 
@@ -423,6 +426,7 @@ def evaluate_vs_model(
     device:          torch.device,
     num_games:       int            = CFG.eval_games,
     time_limit_s:    Optional[float] = CFG.eval_time_limit_s,
+    model_dir:    str             = "",
 ) -> dict:
     """Convenience wrapper: new model vs. old model (parallel)."""
     lbl = f"{time_limit_s:.2f}s/move" if time_limit_s is not None else "no time cap"
@@ -433,4 +437,5 @@ def evaluate_vs_model(
         device=device,
         num_games=num_games,
         time_limit_s=time_limit_s,
+        model_dir=model_dir,
     )

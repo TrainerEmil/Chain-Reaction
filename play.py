@@ -33,6 +33,12 @@ from typing import Optional
 
 import pygame
 import torch
+from pathlib import Path as _Path
+import argparse as _argparse
+_pre = _argparse.ArgumentParser(add_help=False)
+_pre.add_argument("--model-dir", required=True)
+_MODEL_DIR = str(_Path(_pre.parse_known_args()[0].model_dir).resolve())
+sys.path.insert(0, _MODEL_DIR)
 
 # ── Project imports ───────────────────────────────────────────────────────────
 from config import CFG
@@ -487,6 +493,8 @@ AI_MOVE_EVENT = pygame.USEREVENT + 1
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Chain Reaction – Human vs AI")
+    p.add_argument("--model-dir", required=True,
+                   help="Path to model folder, e.g.  models/model_b")
     p.add_argument("--sims",  type=int,   default=CFG.mcts_simulations,
                    help="MCTS simulations per AI move (default: %(default)s)")
     p.add_argument("--time",  type=float, default=CFG.eval_time_limit_s,

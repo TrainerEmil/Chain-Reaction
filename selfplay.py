@@ -37,7 +37,7 @@ _worker_model:  Optional[torch.nn.Module] = None
 _worker_device: Optional[torch.device]   = None
 
 
-def _worker_init(model_state_dict: dict, device_str: str) -> None:
+def _worker_init(model_state_dict: dict, device_str: str, model_dir: str) -> None:
     """
     Called once per worker process when the pool is created.
 
@@ -45,6 +45,9 @@ def _worker_init(model_state_dict: dict, device_str: str) -> None:
       1. Pin PyTorch to 1 thread (see optimisation [2] above).
       2. Load the model into a module-level global (see optimisation [1]).
     """
+    import sys
+    if model_dir not in sys.path:
+        sys.path.insert(0, model_dir)
     global _worker_model, _worker_device
 
     # ── Thread pinning ────────────────────────────────────────────────
@@ -171,7 +174,7 @@ def run_selfplay(
     model: torch.nn.Module,
     device: torch.device,
     num_games: int      = CFG.selfplay_games_per_iter,
-    seed: Optional[int] = None,
+    seed: Optional[int] = None, model_dir: str = ""
 ) -> List[Example]:
     """
     Run *num_games* self-play games in parallel and collect examples.
@@ -204,7 +207,7 @@ def run_selfplay(
     with ProcessPoolExecutor(
         max_workers=num_workers,
         initializer=_worker_init,
-        initargs=(model_state_dict, "cpu"),
+        initargs=(model_state_dict, "cpu", model_dir),
     ) as executor:
 
         futures = [
