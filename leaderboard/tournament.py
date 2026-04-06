@@ -650,6 +650,15 @@ def run_tournament(args: argparse.Namespace) -> None:
     print(f"  Time limit  : {time_limit}s/move")
     print(f"  Elo file    : {RATINGS_FILE.relative_to(ROOT)}\n")
 
+    if args.seed is not None:
+        base_seed = args.seed
+        print(f"  Position seed : {base_seed}  (fixed — use --seed {base_seed} to reproduce)")
+    else:
+        import time as _time_mod
+        base_seed = _time_mod.time_ns() % (2 ** 31)
+        print(f"  Position seed : {base_seed}  (time-based — use --seed {base_seed} to reproduce)")
+
+
     session_results: dict[tuple[str, str], dict] = {}
     match_num = 0
 
@@ -663,7 +672,7 @@ def run_tournament(args: argparse.Namespace) -> None:
 
             # Fresh random positions for every matchup.
             # Seed is deterministic: same round + same pair → same positions.
-            match_seed = args.seed * 100_000 + round_idx * 1_000 + match_num
+            match_seed = base_seed + round_idx * 10_000 + match_num
             positions  = generate_starting_positions(
                 num_positions=args.positions,
                 max_opening_moves=args.max_opening,
@@ -760,9 +769,9 @@ def main() -> None:
              "Default: 5.",
     )
     p.add_argument(
-        "--seed", type=int, default=42,
+        "--seed", type=int, default= None,
         help="Base seed for position generation.  Same seed + round + match "
-             "always produces the same positions.  Default: 42.",
+             "always produces the same positions.  Default: None.",
     )
     p.add_argument(
         "--simulations", type=int, default=16,
